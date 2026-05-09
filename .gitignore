@@ -67,3 +67,11 @@ htmlcov/
 .tox/
 .mypy_cache/
 .ruff_cache/
+
+# --- Claude Code project settings ---
+# Override the global ignore of `.claude/` so we can commit the project-scoped
+# Stop hook in .claude/settings.json. settings.local.json stays per-machine
+# (the user's global git config already excludes it).
+!.claude/
+!.claude/settings.json
+.claude/settings.local.json

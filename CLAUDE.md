@@ -31,6 +31,12 @@ that auto-flips checkboxes — the auto-update is *you*, every time, before
 yielding the turn. Don't ask permission, don't summarize the rule, just
 do it.
 
+**Belt-and-suspenders:** `.claude/settings.json` defines a `Stop` hook that
+prints a one-line `systemMessage` reminding the user (and you, on the next
+turn) about the rule above. The hook is a nudge, not the enforcement. The
+obligation is still this rule. If you see the reminder in the transcript,
+that's why.
+
 ## What this repo is
 
 `pi-stack` is a single-developer implementation of the **Physical Intelligence**
