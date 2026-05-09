@@ -3,6 +3,34 @@
 Project-specific guidance for Claude Code when working in this repo. Global
 preferences live in `~/.claude/CLAUDE.md` and apply on top of this file.
 
+## Master checklist — READ AND OBEY
+
+The single source of truth for "what's done / what's next" is
+[`CHECKLIST.md`](./CHECKLIST.md) at the repo root. It covers bootstrap,
+local environment, simulation stack, paper-by-paper implementation,
+training, evaluation, inference, and cross-cutting hygiene.
+
+**Hard rule (non-negotiable):** whenever you complete work that maps to a
+checklist item, before reporting back to the user you MUST:
+
+1. Open `CHECKLIST.md`.
+2. Flip the matching `- [ ]` to `- [x] (YYYY-MM-DD)` (use today's date in
+   ISO format — `2026-05-10`, etc.). For partial work use
+   `- [~] (YYYY-MM-DD)` with a sub-bullet describing what's left. For
+   blocked items use `- [!]` with a sub-bullet noting the blocker.
+3. Include the checklist edit in the **same** commit that closes the work,
+   so the file never drifts from reality.
+4. If you can't find a matching item, add one under the right section
+   instead of skipping the update.
+
+Do this even for small completions. The checklist is how the user
+audits progress across sessions; if it's stale, the project is stale.
+
+**What this rule is not:** it isn't a hook. There's no harness mechanism
+that auto-flips checkboxes — the auto-update is *you*, every time, before
+yielding the turn. Don't ask permission, don't summarize the rule, just
+do it.
+
 ## What this repo is
 
 `pi-stack` is a single-developer implementation of the **Physical Intelligence**
@@ -35,6 +63,21 @@ via imports rather than duplicating logic.
 | MEM | `pi_stack.memory.mem` | dual-memory (short-term video + long-term language) |
 | RLT | `pi_stack.rlt.rl_token` | tiny actor-critic on a frozen VLA |
 | π₀.₇ | `pi_stack.models.pi07` | Gemma 3 backbone, multi-modal context, MEM |
+
+### Simulation & evaluation stack
+
+| Stack piece | Module | Use case |
+|---|---|---|
+| Libero (5 sub-suites) | `pi_stack.envs.libero` + `configs/eval/libero.yaml` | Standard VLA benchmark |
+| Kinetix | `pi_stack.envs.kinetix` + `configs/eval/kinetix.yaml` | Stress-test RTC on dynamic tasks |
+| MuJoCo | `pi_stack.envs.mujoco` + `configs/eval/mujoco.yaml` | Tabletop baseline |
+| Open X-Embodiment (OXE) | `pi_stack.data.oxe` + `configs/eval/oxe.yaml` | Cross-embodiment held-out replay |
+
+OXE lives in `data/`, not `envs/`, because it's a dataset (replay-evaluated)
+rather than a simulator. Common eval interface: `pi_stack.envs.base.BaseEvalEnv`
+— concrete sims must satisfy this protocol, and `pi_stack.envs.make_env(suite)`
+dispatches by name. Install steps for each piece are in
+[`docs/sim-setup.md`](./docs/sim-setup.md).
 
 ## Conventions
 
@@ -73,6 +116,18 @@ via imports rather than duplicating logic.
 Default to the matching module from the table above first. If the user says
 "Hi Robot," look in `pi_stack.models.hi_robot` and `pi_stack.data.synthetic`
 before grepping the whole tree.
+
+## When the user references a simulator or dataset
+
+- **"Libero" / "Libero-Spatial / -Object / -Goal / -10 / -90"** →
+  `pi_stack.envs.libero`, config `configs/eval/libero.yaml`.
+- **"Kinetix"** → `pi_stack.envs.kinetix`, config `configs/eval/kinetix.yaml`.
+  Specifically used for **RTC** validation; static benchmarks won't surface
+  latency bugs.
+- **"MuJoCo"** → `pi_stack.envs.mujoco`, config `configs/eval/mujoco.yaml`.
+- **"OXE" / "Open X-Embodiment"** → `pi_stack.data.oxe` (dataset, not sim),
+  config `configs/eval/oxe.yaml`. Replay-based, tags every episode with its
+  embodiment.
 
 ## Things to avoid
 

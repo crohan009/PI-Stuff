@@ -5,6 +5,7 @@ Single-handed implementation of the **Physical Intelligence** research arc — f
 paper, traceable from PDF to code.
 
 > Full arc summary: [`About-PI.md`](./About-PI.md). Paper PDFs: [`papers/`](./papers/).
+> Live status: [`CHECKLIST.md`](./CHECKLIST.md). Sim/eval install: [`docs/sim-setup.md`](./docs/sim-setup.md).
 
 ## What's in the box
 

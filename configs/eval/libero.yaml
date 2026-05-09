@@ -1,0 +1,9 @@
+# Libero — standard VLA benchmark (used by π₀ and follow-ups)
+suite: libero_spatial   # libero_spatial | libero_object | libero_goal | libero_10 | libero_90
+embodiment: franka_panda
+action_dim: 7
+control_hz: 20
+max_steps: 600
+image_resolution: 224
+episodes: 50
+seed: 0

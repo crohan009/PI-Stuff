@@ -1,0 +1,12 @@
+# Kinetix — dynamic / force-based tasks for stress-testing RTC
+suite: kinetix_throw    # throw | catch | balance | match
+embodiment: kinetix_arm
+action_dim: 6
+control_hz: 50
+max_steps: 400
+episodes: 100
+seed: 0
+
+# Inject artificial latency to validate Real-Time Chunking robustness.
+# Paper claims RTC tolerates >300 ms; flip on for stress tests.
+inject_latency_ms: 0

@@ -1,0 +1,26 @@
+# Open X-Embodiment — cross-embodiment held-out evaluation.
+# Note: OXE evaluation is replay-based (no simulator). We score the policy
+# against held-out embodiments by comparing predicted action chunks to the
+# ground-truth chunks in the dataset.
+mode: replay
+shuffle_buffer: 10000
+horizon: 50
+image_resolution: 224
+
+held_out_embodiments:
+  - bridge
+  - taco_play
+
+train_embodiments:
+  - fractal20220817_data
+  - kuka
+  - jaco_play
+  - berkeley_cable_routing
+  - roboturk
+  - viola
+  - berkeley_autolab_ur5
+  - language_table
+
+metrics:
+  - mse_action
+  - chunk_success_top1
