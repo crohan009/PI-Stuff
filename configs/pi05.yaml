@@ -1,0 +1,14 @@
+# π₀.₅ — open-world generalization (Apr 2025)
+# Paper: papers/2025-04-22_pi05_open-world-generalization.pdf
+defaults:
+  inherit: pi0.yaml
+
+model:
+  name: pi05
+  predict_subtask_tokens: true
+
+cotrain:
+  mobile_manip: 0.4
+  web: 0.2
+  vqa: 0.2
+  subtask_pred: 0.2

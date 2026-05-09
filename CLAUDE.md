@@ -1,0 +1,98 @@
+# CLAUDE.md — pi-stack
+
+Project-specific guidance for Claude Code when working in this repo. Global
+preferences live in `~/.claude/CLAUDE.md` and apply on top of this file.
+
+## What this repo is
+
+`pi-stack` is a single-developer implementation of the **Physical Intelligence**
+research arc from **π₀** (Oct 2024) through **π₀.₇** (Apr 2026). The arc is
+summarized in [`About-PI.md`](./About-PI.md). All 11 PI papers are in
+[`papers/`](./papers/) (gitignored, kept locally) along with foundational prior
+work in `papers/cited/`.
+
+The user is implementing this **single-handed**. Velocity matters more than
+breadth. Prefer leveraging pre-trained foundation models and the official
+[`openpi`](https://github.com/Physical-Intelligence/openpi) library over
+reimplementing components from scratch.
+
+## Paper → module map (canonical)
+
+When adding code, place it in the module that matches the paper that
+**introduced** the technique, even if a later paper reuses it. Cross-reference
+via imports rather than duplicating logic.
+
+| Paper | Primary module | Key dependencies |
+|---|---|---|
+| π₀ | `pi_stack.models.pi0` | PaliGemma, flow-matching action expert |
+| FAST | `pi_stack.tokenization.fast` | `AutoProcessor.from_pretrained("physical-intelligence/fast")` |
+| Hi Robot | `pi_stack.models.hi_robot` + `pi_stack.data.synthetic` | uses π₀ as System 1 |
+| π₀.₅ | `pi_stack.models.pi05` | co-training mix (mobile, web, VQA) |
+| KI | `pi_stack.training.ki` | stop-gradient between VLM and action expert |
+| RTC | `pi_stack.inference.rtc` | async inpainting; wraps any flow-matching policy |
+| π*₀.₆ | `pi_stack.models.pi06` + `pi_stack.training.recap` | advantage-conditioned RL |
+| Human-to-Robot | `pi_stack.data.human_to_robot` | egocentric video → robot transfer |
+| MEM | `pi_stack.memory.mem` | dual-memory (short-term video + long-term language) |
+| RLT | `pi_stack.rlt.rl_token` | tiny actor-critic on a frozen VLA |
+| π₀.₇ | `pi_stack.models.pi07` | Gemma 3 backbone, multi-modal context, MEM |
+
+## Conventions
+
+### Code
+- **Layout:** `src/pi_stack/`. Imports always go through the package
+  (`from pi_stack.tokenization.fast import FASTTokenizer`), never relative
+  paths from `scripts/` or notebooks.
+- **Type hints:** required on public functions. Internal helpers can skip.
+- **Docstrings:** every module top-level docstring must cite the paper it
+  implements (filename in `papers/`) and, where helpful, the section number.
+- **Comments:** only when the WHY is non-obvious. Don't restate the paper.
+
+### Dependencies
+- Use `uv add` / `uv sync`. Never `pip install` into the project venv.
+- Heavy deps (torch, jax, mujoco, libero, kinetix) live in `[project.optional-dependencies]`
+  extras (`ml`, `gpu`, `jax`, `sim`, `serve`, `track`, `dev`).
+- The bare install (`uv sync` with no extras) must work on CPU-only macOS.
+
+### Configs
+- One YAML per model/recipe in `configs/`.
+- Configs are loaded with `pi_stack.utils.config.load_config` (Pydantic).
+- Don't bake hyperparameters into Python defaults — put them in the config.
+
+### Data and checkpoints
+- `data/` and `checkpoints/` are gitignored. Use them for local artifacts.
+- For shared/public datasets (Libero, OXE), prefer streaming over downloading.
+
+### Testing
+- `pytest` in `tests/`. Smoke tests only at scaffold time; real tests
+  arrive when the corresponding module gains real code.
+- Don't write tests that require GPU or downloaded weights unless gated by
+  a `pytest.mark.slow` / `pytest.mark.gpu` marker.
+
+## When the user references a paper by name
+
+Default to the matching module from the table above first. If the user says
+"Hi Robot," look in `pi_stack.models.hi_robot` and `pi_stack.data.synthetic`
+before grepping the whole tree.
+
+## Things to avoid
+
+- **Don't reorganize the per-paper module layout.** It's the user's primary
+  navigation aid. Add new files inside existing modules instead.
+- **Don't invent fix recipes for things that aren't broken.** This is a
+  research scaffold, not a production codebase — premature hardening adds
+  friction without benefit.
+- **Don't pull in another VLA framework** (lerobot, octo, openvla) without
+  asking. The intent is to track the PI / openpi line specifically.
+- **Don't auto-download paper PDFs.** They're already in `papers/`. The
+  `scrape_pi.py` helper at the root exists for re-running the crawl if the
+  user asks; it's not a normal workflow step.
+
+## External resources
+
+- **openpi:** https://github.com/Physical-Intelligence/openpi (PI's official lib)
+- **FAST tokenizer:** HF `physical-intelligence/fast`
+- **PaliGemma:** HF `google/paligemma-3b-pt-224`
+- **Gemma 3:** HF `google/gemma-3-4b-pt`
+- **SigLIP:** HF `google/siglip-base-patch16-224`
+- **Libero:** https://github.com/Lifelong-Robot-Learning/LIBERO
+- **Kinetix:** https://github.com/FlairOx/Kinetix

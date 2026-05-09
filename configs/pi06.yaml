@@ -1,0 +1,21 @@
+# π*₀.₆ — VLA learns from experience (Nov 2025)
+# Papers: papers/2025-11-17_pistar06_vla-learns-from-experience.pdf
+#         papers/2025-11-17_pistar06_model-card.pdf
+defaults:
+  inherit: pi05.yaml
+
+model:
+  name: pi06
+  backbone:
+    name: gemma3
+    hf_repo: google/gemma-3-4b-pt
+  advantage_conditioning: true
+  value_distribution_bins: 51
+
+training:
+  recipe: recap
+  recap:
+    discount: 0.99
+    advantage_bins: 51
+    advantage_token_embed_dim: 64
+    target_update_period: 500

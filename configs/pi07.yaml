@@ -1,0 +1,15 @@
+# π₀.₇ — steerable generalist (Apr 2026)
+# Paper: papers/2026-04-16_pi07_steerable-model-emergent-capabilities.pdf
+defaults:
+  inherit: pi06.yaml
+
+model:
+  name: pi07
+  use_subgoal_images: true
+  use_episode_metadata: true
+
+memory:
+  short_term_video_seconds: 8.0
+  short_term_fps: 4
+  long_term_max_summaries: 64
+  summarizer_model: claude-haiku-4-5-20251001

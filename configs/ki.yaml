@@ -1,0 +1,12 @@
+# Knowledge Insulation training recipe (May 2025)
+# Paper: papers/2025-05-28_ki_train-fast-run-fast-generalize-better.pdf
+ki:
+  discrete_loss_weight: 1.0    # autoregressive FAST-token loss on the VLM
+  continuous_loss_weight: 1.0  # flow-matching loss on the action expert
+  stop_gradient_at_interface: true
+
+fast:
+  horizon: 50
+  action_dim: 14
+  target_tokens_per_second: 30
+  use_official_tokenizer: true

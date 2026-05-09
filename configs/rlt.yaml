@@ -1,0 +1,8 @@
+# RL Token — local refinement (Mar 2026)
+# Paper: papers/2026-03-19_rlt_precise-manipulation-online-rl.pdf
+rlt:
+  rl_token_dim: 256
+  actor_hidden: 256
+  critic_hidden: 256
+  learning_rate: 3.0e-4
+  freeze_vla: true

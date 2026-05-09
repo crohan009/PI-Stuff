@@ -1,0 +1,12 @@
+# Real-Time Chunking inference (Jun 2025)
+# Paper: papers/2025-06-09_rtc_real-time-action-chunking-large-models.pdf
+rtc:
+  chunk_horizon: 50
+  overlap_steps: 10
+  max_inflight: 1
+  control_hz: 50
+
+server:
+  host: 0.0.0.0
+  port: 8765
+  max_message_bytes: 16777216  # 16 MiB
