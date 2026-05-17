@@ -80,10 +80,11 @@ Legend: `- [ ]` open · `- [x] (YYYY-MM-DD)` done · `- [~] (YYYY-MM-DD)` in pro
 - [ ] Dummy-input forward pass < 200 ms on RTX 4090 (or MPS smoke)
 
 ### 3b. FAST (Jan 2025) — `pi_stack.tokenization.fast`
-- [ ] `FASTTokenizer.encode(actions)` → `list[int]`
-- [ ] `FASTTokenizer.decode(tokens, H, D)` → `(H, D)` float array
-- [ ] Round-trip MSE < 1e-3 on a sanity trajectory
+- [x] (2026-05-17) `FASTTokenizer.encode(actions)` → `list[list[int]]` (B chunks of tokens; one list per batch element)
+- [x] (2026-05-17) `FASTTokenizer.decode(tokens, H, D)` → `(B, H, D)` float32 array
+- [x] (2026-05-17) Round-trip MSE < 1e-3 on a sanity trajectory — unit-amplitude phase-shifted sine, MSE consistently < 1e-3 in `tests/test_fast_tokenizer.py`; manual EDA in `notebooks/01_fast_eda.ipynb`
 - [ ] Local DCT+BPE fallback (`use_official_tokenizer=False`)
+  - sub: explicitly raises NotImplementedError. Deferred — the HF processor is the recommended path and works fine; we'd only need the local fallback to ablate the tokenizer choice
 
 ### 3c. Hi Robot (Feb 2025) — `pi_stack.models.hi_robot` + `pi_stack.data.synthetic`
 - [ ] `segment_demonstration()` calls a VLM and parses JSON output
@@ -97,16 +98,21 @@ Legend: `- [ ]` open · `- [x] (YYYY-MM-DD)` done · `- [~] (YYYY-MM-DD)` in pro
 - [ ] Subtask predictions feed back into action expert as conditioning
 
 ### 3e. Knowledge Insulation (May 2025) — `pi_stack.training.ki`
-- [ ] Stop-gradient at VLM ↔ expert interface verified by autograd test
-- [ ] Dual-loss step: discrete (FAST tokens) + continuous (flow matching)
+- [x] (2026-05-17) Stop-gradient at VLM ↔ expert interface verified by autograd test — `insulate()` primitive + `tests/test_ki.py::test_end_to_end_ki_blocks_expert_gradient_from_vlm` runs a full toy forward and confirms VLM params receive zero gradient
+- [x] (2026-05-17) Dual-loss step: discrete (FAST tokens, CE) + continuous (flow matching, MSE) — `ki_loss()` + `KITrainer.step()` reference recipe; toy run in `notebooks/02_ki_recipe.ipynb` shows backbone still drifts from the discrete loss while expert receives gradient
 - [ ] Convergence speed measurably faster than diffusion-only baseline
+  - blocker: needs a real backbone + dataset; revisit when we wire π₀ or π₀.₇
 - [ ] VLM language-grounding metric does not degrade across training
+  - blocker: same — needs real VLM and a held-out language probe
 
 ### 3f. Real-Time Chunking (Jun 2025) — `pi_stack.inference.rtc`
 - [ ] `flow_matching.euler_sample()` supports `inpaint_prefix=`
-- [ ] `RTCRunner` Algorithm 1 implemented (single inflight worker)
-- [ ] Survives 350 ms injected latency on `kinetix_throw` without misses
-- [ ] Smooth motion preserved across chunk boundaries (jerk metric)
+  - sub: RTC trusts the policy callable to honor the prefix contract; the prefix is forwarded as a kwarg. The actual inpainting sampler is part of the flow-matching expert (deferred until §3a)
+- [x] (2026-05-17) `RTCRunner` Algorithm 1 implemented (single inflight worker) — `pi_stack.inference.rtc.RTCRunner`; 7 unit tests in `tests/test_rtc.py` cover bootstrap, async overlap, fallback, prefix forwarding, and worker exception surfacing
+- [~] (2026-05-17) Survives 350 ms injected latency on `kinetix_throw` without misses
+  - sub: 200 ms-latency synthetic policy verified in `notebooks/03_rtc_loop.ipynb` (no swap blocking with H=50, overlap=10 at 50 Hz). The kinetix_throw integration is gated on wrapper-impl in §2b
+- [~] (2026-05-17) Smooth motion preserved across chunk boundaries (jerk metric)
+  - sub: qualitatively verified via inter-step Δt plot in the RTC notebook. A formal jerk metric will come with real env integration
 
 ### 3g. π*₀.₆ (Nov 2025) — `pi_stack.models.pi06` + `pi_stack.training.recap`
 - [ ] Backbone swapped to Gemma 3 4B
