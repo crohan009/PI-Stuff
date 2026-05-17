@@ -148,6 +148,47 @@ before grepping the whole tree.
   `scrape_pi.py` helper at the root exists for re-running the crawl if the
   user asks; it's not a normal workflow step.
 
+## Two environments — local vs RunPod
+
+This project deliberately splits work across two homes:
+
+| Environment | What runs here | What does NOT run here |
+|---|---|---|
+| **Local laptop** (`~/Documents/swat/cefi/PI-Stuff/`) | Test suite, TinyBackbone policy code, MEM logic, RTC algorithm, FAST tokenizer download, KI / RLT / RECAP mechanics on toy data | Real PaliGemma / Gemma 3 forward passes, full pre-training, real Libero/Kinetix rollouts |
+| **RunPod pod** (cloned from git on the pod) | Real backbones, KI fine-tuning, RECAP RL, RLT online runs, multi-GPU pre-training, real sim rollouts | The fast inner-loop edit-and-pytest cycle (do that local) |
+
+**Code lives in git. Data and checkpoints live on a RunPod Network Volume.**
+Same code path runs both places — what differs is the `backbone=` kwarg
+passed to `Pi0Policy` / `Pi05Policy` / `Pi06Policy` / `Pi07Policy`. Local
+uses `TinyBackbone`; RunPod uses `load_backbone(GEMMA3_4B)` (or PaliGemma).
+
+### `NotImplementedError` paths — when they finally get exercised
+
+A handful of code paths intentionally raise `NotImplementedError` because
+they require hardware/weights we don't have locally:
+
+- `pi_stack.models.backbones.load_backbone(spec)` for PaliGemma / Gemma 3 / SigLIP
+- `pi_stack.tokenization.fast.FASTTokenizer` with `use_official_tokenizer=False`
+  (the local DCT+BPE fallback — deferred; HF processor works on both envs)
+- Real-env rollout paths in `pi_stack.envs.{libero,kinetix,mujoco}` —
+  blocked on robosuite dep resolution (see `docs/sim-setup.md`)
+
+Treat hitting one of these as a signal: either this work belongs on the
+RunPod pod, or there's a deferred-task acknowledgement in `CHECKLIST.md`.
+**Don't paper over them locally** — the gates are intentional.
+
+### Deploying changes to the pod
+
+The expected workflow:
+1. Edit + test locally with TinyBackbone. `uv run pytest -q` is the inner loop.
+2. Commit and push when green.
+3. SSH into the pod, `git pull`, run the same command with the real config
+   (e.g. `uv run python scripts/train.py --config configs/pi07.yaml`).
+
+Step 3 is the only place the gated paths actually fire. The walkthrough is
+in [`docs/runpod.md`](./docs/runpod.md); the wiring checklist is §8 of
+[`CHECKLIST.md`](./CHECKLIST.md).
+
 ## External resources
 
 - **openpi:** https://github.com/Physical-Intelligence/openpi (PI's official lib)
@@ -157,3 +198,4 @@ before grepping the whole tree.
 - **SigLIP:** HF `google/siglip-base-patch16-224`
 - **Libero:** https://github.com/Lifelong-Robot-Learning/LIBERO
 - **Kinetix:** https://github.com/FlairOx/Kinetix
+- **RunPod:** https://www.runpod.io (cluster host); docs at https://docs.runpod.io

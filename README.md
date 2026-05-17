@@ -136,11 +136,36 @@ PI-Stuff/
 
 ## Hardware reality
 
-- **Inference / fine-tuning / RL refinement:** one RTX 4090 is enough for π₀-class
-  policies thanks to KI + FAST (≈ 7.5× faster training than pure diffusion).
-- **Full pre-training of π₀.₆ / π₀.₇:** needs ≥ 8×H100. Treat as aspirational.
-- **RTC:** designed to tolerate 300+ ms inference latency, so a remote
-  workstation over LAN/WebSocket is a viable deployment.
+Two environments, by design:
+
+### Local laptop (Apple Silicon / CPU)
+Runs everything that doesn't need real foundation-model weights — the full test
+suite, TinyBackbone-powered policy code, MEM logic, RTC algorithm, FAST
+tokenizer (small download), KI / RLT / RECAP mechanics on toy data.
+`pytest -q` takes a few seconds. This is where you iterate.
+
+### RunPod GPU cluster (real weights + scale)
+Two-pod plan:
+
+| Pod | When to use | Spec | Approx hourly cost |
+|---|---|---|---|
+| **Dev / inference / fine-tune** | Real PaliGemma or Gemma 3 forward passes; LoRA / KI fine-tunes; RLT or RECAP runs; RTC stress tests on Kinetix | 1× A100 80GB PCIe | ~$1.5-3 |
+| **Full pre-training** | π₀ / π₀.₅ end-to-end; π*₀.₆ / π₀.₇ from scratch | 8× H100 SXM (NVLink) | ~$25-35 |
+
+Persistent state lives on a single RunPod Network Volume (~1-2 TB) mounted on
+both pods at `/workspace/data` and `/workspace/checkpoints`. Code is git-synced.
+
+The full wiring walkthrough is in [`docs/runpod.md`](./docs/runpod.md); the
+checkbox plan is §8 of [`CHECKLIST.md`](./CHECKLIST.md).
+
+### Why this split
+
+- KI + FAST give ≈ 7.5× faster training than pure diffusion, so single-GPU
+  fine-tuning is realistic for most downstream work.
+- RTC is designed to tolerate 300+ ms inference latency, so the inference
+  pod can serve a real robot over LAN/WebSocket without smoothness issues.
+- Multi-node training isn't on the roadmap — single 8-GPU pod is the target
+  for full pre-training. NVLink intra-node is the bandwidth budget.
 
 ## License
 

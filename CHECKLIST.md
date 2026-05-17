@@ -180,6 +180,91 @@ Legend: `- [ ]` open · `- [x] (YYYY-MM-DD)` done · `- [~] (YYYY-MM-DD)` in pro
 - [ ] Real-robot dry run (or Libero-as-stand-in) over LAN
 - [ ] 10–15 minute long-horizon task completes end-to-end with MEM enabled
 
+## 8. RunPod GPU cluster wiring
+
+The cluster is where the `NotImplementedError`-gated code paths actually
+run: real PaliGemma / Gemma 3 forward passes, multi-GPU pre-training,
+LoRA / KI fine-tunes, RLT online runs, large-scale evals. Local stays the
+edit-and-pytest loop. See [`docs/runpod.md`](./docs/runpod.md) for the
+step-by-step walkthrough; this section is the checkbox plan.
+
+### 8a. Account + access
+- [ ] Sign up at https://www.runpod.io ; verify billing
+- [ ] Generate a RunPod **API key** (Settings → API Keys); store in your local password manager
+- [ ] Generate an SSH key on the laptop if you don't already have one (`ssh-keygen -t ed25519`) and add the public key to RunPod (Settings → SSH Public Keys)
+- [ ] (optional) Install the RunPod CLI: `pip install runpod` — useful for scripted pod start/stop
+
+### 8b. Persistent storage
+- [ ] Create a **Network Volume** (1-2 TB, in the region you'll be running pods)
+  - sub: stores datasets, checkpoints, HF cache. Mounted at the same path on every pod (`/workspace`)
+- [ ] Decide on a fixed directory layout for the volume:
+  - `/workspace/pi-stack/` — git checkout (one per environment if branching)
+  - `/workspace/data/` — Libero datasets, OXE subset, custom demos
+  - `/workspace/checkpoints/` — training outputs (training script writes here)
+  - `/workspace/hf-cache/` — `HF_HOME=/workspace/hf-cache` so weights download once
+  - `/workspace/wandb/` — run logs if using wandb
+
+### 8c. Container image
+- [ ] Pick a base image — RunPod's official `runpod/pytorch:2.4.0-py3.11-cuda12.4-devel` (or newest equivalent) is a good starting point
+- [ ] Author a thin `Dockerfile` on top that bakes in:
+  - `uv` (so cold-start sync is fast)
+  - System deps: `git`, `git-lfs`, `build-essential`, `libgl1` (for mujoco rendering), `ffmpeg` (for video logging)
+  - A pre-populated `uv.lock` resolution (run `uv sync --extra all` during image build)
+- [ ] Push to a registry — ghcr.io or Docker Hub — and reference it when creating pod templates
+
+### 8d. Pod templates
+- [ ] Create a **Dev pod template**: 1× A100 80GB PCIe (or H100 PCIe for ~2× speed), Network Volume mounted at `/workspace`, your custom image, JupyterLab + SSH enabled
+- [ ] Create a **Training pod template**: 8× H100 SXM (NVLink), same volume + image. Spot pricing if you can tolerate interruptions; on-demand otherwise
+- [ ] (optional) Create an **Inference pod template**: 1× A6000 48GB, lower-cost serve target if you don't need fine-tuning capacity
+
+### 8e. First-pod bootstrap
+- [ ] Start the dev pod
+- [ ] SSH in: `ssh root@<pod-ip> -p <pod-port>`
+- [ ] On the pod: `cd /workspace && git clone <your-fork-url> pi-stack && cd pi-stack`
+- [ ] `uv sync --extra ml --extra dev --extra sim --extra jax --extra oxe`
+- [ ] `bash scripts/setup_sim.sh` (the same idempotent script we use locally)
+- [ ] `uv run pytest -q` — should be 65/65 green, same as local
+- [ ] `export HF_HOME=/workspace/hf-cache` (persist across pod restarts via volume)
+- [ ] `export HF_TOKEN=<token>` and `huggingface-cli whoami`
+
+### 8f. Real-backbone smoke test
+- [ ] Wire `load_backbone(GEMMA3_4B)` — replace the `NotImplementedError` body with a real `transformers.AutoModel.from_pretrained(spec.hf_repo, ...)` call, returning a thin adapter that exposes `(logits, features)` matching `TinyBackbone`'s contract
+- [ ] First call downloads ~8 GB into `/workspace/hf-cache/`; subsequent pod restarts use the cache
+- [ ] Build `Pi07Policy(Pi07Config(backbone=GEMMA3_4B), backbone=load_backbone(GEMMA3_4B))` and run `predict_chunk(...)` on a real-sized input (224×224 image, 50-step horizon)
+- [ ] Time the forward pass; record VRAM peak. Targets: < 200 ms forward on H100, < 30 GB VRAM at fp16
+
+### 8g. Dataset hydration
+- [ ] Pull Libero from the source clone on the volume; verify `from libero.libero import benchmark` works (re-run `scripts/setup_sim.sh` if needed)
+- [ ] Download an OXE subset onto `/workspace/data/oxe/` — `tfds.load("fractal20220817_data", data_dir="/workspace/data/oxe")`
+- [ ] Stage any custom teleop demos under `/workspace/data/demos/`
+- [ ] Add `/workspace/data/` and `/workspace/checkpoints/` to `.gitignore` paths the training scripts respect (already true in the local repo)
+
+### 8h. Multi-GPU training entrypoint
+- [ ] Decide on launcher: `accelerate launch` is the lowest-friction option for FSDP/DDP across our PyTorch trainers
+- [ ] Add `configs/runtime/single_gpu.yaml` and `configs/runtime/multi_gpu_ddp.yaml` (or use `accelerate config` to author them)
+- [ ] Plumb the launcher through `scripts/train.py` so the same `--config configs/pi07.yaml` works on 1 GPU and 8 GPUs
+- [ ] Verify scaling: a 100-step throughput-only run on 1 GPU vs 8 GPU shows ≥ 6.5× speedup (target 80%+ scaling efficiency)
+
+### 8i. Code & data sync workflow
+- [ ] Establish the loop: edit local → `git push` → on pod `git pull && uv sync` → run
+- [ ] Or: use `rsync -av` for fast local-edit iteration (skip git when prototyping)
+- [ ] Keep `.env` per-machine — never commit; put `HF_TOKEN`, `WANDB_API_KEY` there on both ends
+- [ ] Set up wandb if you want shared run telemetry: `wandb login` on the pod with the same key as local
+
+### 8j. Cost discipline
+- [ ] Default: stop the dev pod whenever you're not actively using it (RunPod bills by the minute on running pods)
+- [ ] Use **spot** pods for training runs that can checkpoint and resume — typically 30-50% cheaper than on-demand
+- [ ] Set an idle-timeout (RunPod offers auto-shutdown) on the dev pod
+- [ ] Add a `runpod-bill-check` cron / weekly habit to spot run-away pods
+- [ ] Estimate budget per workflow ahead of time (e.g., π₀.₇ pre-train on 8× H100 SXM for 72 h ≈ $1.8-2.5 k)
+
+### 8k. Production readiness (later)
+- [ ] Containerize the inference server (`scripts/infer_server.py`) for a dedicated inference pod
+- [ ] Configure secrets management — RunPod environment variables for `HF_TOKEN`, `WANDB_API_KEY`, robot LAN credentials
+- [ ] (optional) Set up a one-click pod-from-template script in `scripts/runpod_launch.py` using the RunPod Python SDK
+
+---
+
 ## 7. Cross-cutting
 
 - [ ] `ruff check src tests` clean

@@ -58,3 +58,19 @@ This document outlines the research arc of **Physical Intelligence (PI)** from O
 **Core Problem:** Prior models struggled with **compositional generalization**—recombining known skills to solve entirely new tasks out of the box.
 **Technical Contribution:** **$\pi_{0.7}$** introduces **multi-modal context conditioning**, steering the model using detailed language instructions, generated subgoal images, and episode metadata (speed, quality).
 **Evolution:** Build on the **Gemma 3 (4B)** backbone and the MEM architecture, $\pi_{0.7}$ represents the current state-of-the-art: a steerable model that can operate complex appliances like espresso machines out of the box.
+
+---
+
+## Appendix — Compute requirements at a glance
+
+The arc is implementable single-handed because the recipe (KI + FAST) is ~7.5× faster to train than pure diffusion and most downstream work (RL refinement via RLT, evaluation, RTC inference) fits on a single GPU. Full pre-training of the larger models still needs an 8-GPU node.
+
+| Workflow | Minimum GPU | VRAM | System RAM | Persistent storage |
+|---|---|---|---|---|
+| Real-backbone inference (π₀ / π₀.₇) | 1× A6000 48 GB | 24-48 GB | 64 GB | 100 GB |
+| Single-policy fine-tune (KI recipe) | 1× A100 80 GB | 80 GB | 128 GB | 500 GB |
+| RL refinement (RLT / RECAP) | 1× A100 80 GB | 80 GB | 256 GB | 200 GB |
+| Full pre-train π₀ / π₀.₅ | 4-8× A100/H100 80 GB | 4-8 × 80 GB | 512 GB | 1 TB |
+| Full pre-train π*₀.₆ / π₀.₇ | 8× H100 SXM (NVLink) | 8 × 80 GB | 1 TB | 1-2 TB |
+
+The local repo at `~/Documents/swat/cefi/PI-Stuff` runs everything that doesn't need real weights (TinyBackbone, MEM, RLT/RECAP mechanics, RTC algorithm) on Apple Silicon / CPU. Real weights and full pre-training are deployed to a **RunPod** GPU cluster — see [`docs/runpod.md`](./docs/runpod.md) and section §8 of [`CHECKLIST.md`](./CHECKLIST.md) for the wiring.
