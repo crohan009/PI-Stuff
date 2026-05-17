@@ -116,9 +116,10 @@ Legend: `- [ ]` open · `- [x] (YYYY-MM-DD)` done · `- [~] (YYYY-MM-DD)` in pro
 
 ### 3g. π*₀.₆ (Nov 2025) — `pi_stack.models.pi06` + `pi_stack.training.recap`
 - [ ] Backbone swapped to Gemma 3 4B
-- [ ] Distributional value head (51 bins) + advantage estimator
-- [ ] Advantage tokens injected as conditioning
-- [ ] `RECAPTrainer` alternates value and policy updates without collapse
+  - blocker: depends on §3a (π₀ backbone wiring); π*₀.₆ inherits from Pi06Policy which is still a stub
+- [x] (2026-05-17) Distributional value head (51 bins) + advantage estimator — `DistributionalValueHead` with C51 Bellman projection in `pi_stack.training.recap`; learns cluster-specific return distributions in `notebooks/06_recap_value_head.ipynb`
+- [x] (2026-05-17) Advantage tokens injected as conditioning — `AdvantageConditioner` bucketizes continuous advantages and embeds them as a token; `top_bucket_token()` is the deployment-time "ask for above-average behavior" hook
+- [x] (2026-05-17) `RECAPTrainer` alternates value and policy updates without collapse — verified end-to-end in `tests/test_recap.py::test_recap_trainer_step` and demonstrated in the notebook
 
 ### 3h. Human-to-Robot (Dec 2025) — `pi_stack.data.human_to_robot`
 - [ ] Egocentric video loader (Ego4D or equivalent) emits `(frames, language)`
@@ -126,17 +127,21 @@ Legend: `- [ ]` open · `- [x] (YYYY-MM-DD)` done · `- [~] (YYYY-MM-DD)` in pro
 - [ ] Co-training run shows positive transfer on a robot held-out task
 
 ### 3i. MEM (Mar 2026) — `pi_stack.memory.mem`
-- [ ] Short-term ring buffer at configured fps
-- [ ] LLM summarizer turns finished subtasks into language summaries
-- [ ] `recall(query)` returns top-K summaries by relevance
+- [x] (2026-05-17) Short-term ring buffer at configured fps — `ShortTermVideoMemory` downsamples to `short_term_fps`, evicts FIFO; verified across two `test_mem.py` cases
+- [x] (2026-05-17) LLM summarizer turns finished subtasks into language summaries — pluggable `SummarizerFn` interface with a deterministic default; production swaps in Anthropic/HF model via constructor arg
+- [x] (2026-05-17) `recall(query)` returns top-K summaries by relevance — brute-force cosine over a deterministic hash embedder (swap to `sentence-transformers` for real semantic recall, documented in `notebooks/04_mem_eda.ipynb`)
 - [ ] Serialize/deserialize for episode resumption
-- [ ] Integration test: 15-minute task with stateful question ("did I add salt?")
+  - sub: not implemented; the dataclasses are pickle-able as a fallback but a proper JSON/numpy round-trip would be cleaner
+- [~] (2026-05-17) Integration test: 15-minute task with stateful question ("did I add salt?")
+  - sub: 15-subtask kitchen scenario demonstrated in `notebooks/04_mem_eda.ipynb`; `recall("did I add salt yet?")` correctly retrieves the salt subtask. A formal `tests/` integration test is still nice-to-have
 
 ### 3j. RLT (Mar 2026) — `pi_stack.rlt.rl_token`
 - [ ] RL token extracted from a chosen VLA layer
-- [ ] Actor MLP produces action residual on top of frozen VLA
-- [ ] Critic + SAC-style update rule
-- [ ] Insertion task: 20% → ≥50% success after a few hours of practice
+  - sub: the head takes the RL token as input (decoupled by design); the VLA-side hook lands when we wire π₀.₇
+- [x] (2026-05-17) Actor MLP produces action residual on top of frozen VLA — reparameterized squashed-Gaussian actor with `action_residual_scale` clamp (default ±5%)
+- [x] (2026-05-17) Critic + SAC-style update rule — twin Q nets, target networks with Polyak averaging, entropy auto-tuning. `tests/test_rlt.py::test_critic_can_fit_constant_target` shows convergence on a known target
+- [~] (2026-05-17) Insertion task: 20% → ≥50% success after a few hours of practice
+  - sub: SAC update mechanics verified on a synthetic insertion task in `notebooks/05_rlt_actor_critic.ipynb`; real-robot insertion is gated on env integration
 
 ### 3k. π₀.₇ (Apr 2026) — `pi_stack.models.pi07`
 - [ ] Subgoal-image encoder (SigLIP) feeding context tokens
