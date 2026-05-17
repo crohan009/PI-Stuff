@@ -28,24 +28,86 @@ Each module's docstring cites the paper section it implements.
 ## Quick start
 
 ```bash
-# 1. Install uv (if you haven't)
+# 1. Install uv (if you haven't). Lands in ~/.local/bin.
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 2. Sync the bare environment (Python 3.11)
+# 2. Make sure ~/.local/bin is on PATH for this shell:
+export PATH="$HOME/.local/bin:$PATH"
+
+# 3. Sync the bare environment (Python 3.11; uv picks it up from pyenv
+#    or downloads one automatically).
 uv sync
 
-# 3. Pull in the ML stack
+# 4. Pull in the ML stack (transformers, accelerate, scipy, sentencepiece,
+#    and torch+MPS/CPU — on macOS arm64 you get MPS automatically).
 uv sync --extra ml
 
-# 4. (GPU) Install torch from the right wheel index for your CUDA version
-uv pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision
-
-# 5. Sanity check
+# 5. Add the dev tools and run smoke tests.
+uv sync --extra ml --extra dev
 uv run pytest -q
+
+# 6. (Linux + NVIDIA only) replace the default torch with a CUDA build:
+uv pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision
 ```
 
 Everything heavier than `numpy` is gated behind extras (`ml`, `gpu`, `jax`,
 `sim`, `serve`, `track`, `dev`, `all`) so the bare install stays light.
+
+> `transformers` is currently pinned to `<5` — the PI-published FAST
+> tokenizer's custom code on HF Hub is authored against the v4 tokenizer
+> API. Revisit when PI ships a v5-compatible build.
+
+## Activating and deactivating the environment
+
+uv creates a project-local venv at `.venv/` on first `uv sync`. There are
+two equivalent ways to use it:
+
+### A) `uv run <cmd>` (no activation needed — recommended for one-offs)
+
+```bash
+uv run python scripts/train.py --config configs/pi0.yaml
+uv run pytest -q
+uv run python -c "import torch; print(torch.backends.mps.is_available())"
+```
+
+`uv run` always uses `.venv/`, regardless of what's "active." This is the
+right pattern for CI, Make targets, and most scripts.
+
+### B) Activate the venv as your shell's default (recommended for interactive sessions)
+
+```bash
+# Activate (zsh / bash):
+source .venv/bin/activate
+# You'll see (pi-stack) prepended to your prompt.
+
+# Now `python`, `pytest`, `pip`, etc. all resolve to .venv/bin/*:
+python scripts/eval.py --model configs/pi0.yaml --eval configs/eval/libero.yaml
+pytest -q
+which python   # -> /Users/.../PI-Stuff/.venv/bin/python
+
+# Deactivate when done:
+deactivate
+```
+
+Fish shell users: `source .venv/bin/activate.fish`. PowerShell: `.\.venv\Scripts\Activate.ps1`.
+
+### Re-syncing after pulling new changes
+
+```bash
+uv sync --extra ml --extra dev       # match whatever extras you use
+```
+
+uv is idempotent — running sync when the lockfile matches the venv is a
+no-op (well under a second).
+
+### Nuking the venv and starting over
+
+```bash
+rm -rf .venv uv.lock
+uv sync --extra ml --extra dev
+```
+
+The `.venv/` directory is gitignored, so this is always safe.
 
 ## Repository layout
 

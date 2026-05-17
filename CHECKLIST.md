@@ -29,13 +29,16 @@ Legend: `- [ ]` open · `- [x] (YYYY-MM-DD)` done · `- [~] (YYYY-MM-DD)` in pro
 
 ## 1. Local environment
 
-- [ ] Install `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- [ ] `uv sync` succeeds (bare install)
-- [ ] `uv sync --extra ml` succeeds (transformers + accelerate + scipy)
-- [ ] `uv sync --extra dev` and `uv run pytest -q` passes smoke tests
+- [x] (2026-05-17) Install `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`) — uv 0.11.12, into `~/.local/bin`
+- [x] (2026-05-17) `uv sync` succeeds (bare install) — Python 3.11.9 from pyenv, 17 core packages
+- [x] (2026-05-17) `uv sync --extra ml` succeeds (transformers + accelerate + scipy + sentencepiece)
+  - sub: added `sentencepiece` to the `ml` extra — required by the FAST processor's BPE backend
+  - sub: pinned `transformers<5` — PI's published FAST tokenizer code on HF Hub is authored against v4 tokenizer API
+- [x] (2026-05-17) `uv sync --extra dev` and `uv run pytest -q` passes smoke tests (6/6)
 - [ ] `HF_TOKEN` set in `.env` and `huggingface-cli whoami` works
-- [ ] GPU torch wheels installed for the local CUDA version (or MPS/CPU fallback verified on macOS)
-- [ ] `uv run python -c "from transformers import AutoProcessor; AutoProcessor.from_pretrained('physical-intelligence/fast', trust_remote_code=True)"` succeeds
+  - sub: FAST tokenizer download worked unauthenticated, but setting a token enables higher rate limits + private gated models (PaliGemma, Gemma 3)
+- [x] (2026-05-17) GPU torch wheels installed for the local CUDA version (or MPS/CPU fallback verified on macOS) — torch 2.11.0 + MPS backend live on macOS-14.5-arm64; tensor on `mps:0` confirmed
+- [x] (2026-05-17) `uv run python -c "from transformers import AutoProcessor; AutoProcessor.from_pretrained('physical-intelligence/fast', trust_remote_code=True)"` succeeds — `UniversalActionProcessor`, round-trip MSE 2.8e-4 on a (50, 14) sine chunk
 - [ ] (optional) `wandb login` if using `track` extra
 
 ## 2. Simulation & evaluation stack
@@ -165,7 +168,7 @@ Legend: `- [ ]` open · `- [x] (YYYY-MM-DD)` done · `- [~] (YYYY-MM-DD)` in pro
 
 - [ ] `ruff check src tests` clean
 - [ ] `mypy src` clean (or explicit `# type: ignore` with justification)
-- [ ] All paper modules pass `tests/test_smoke.py`
+- [x] (2026-05-17) All paper modules pass `tests/test_smoke.py` — 6/6 green
 - [ ] README quick-start works on a clean machine
 - [ ] Paper → module map in `CLAUDE.md` matches the actual tree
 - [ ] Each completed paper has a `docs/NN-shortname.md` design note

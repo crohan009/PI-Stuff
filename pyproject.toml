@@ -26,15 +26,20 @@ dependencies = [
 
 [project.optional-dependencies]
 # Foundation-model + tokenizer stack. Pulls torch via transformers.
+# Note: transformers pinned to <5 because the FAST processor's custom code on
+# HF Hub (physical-intelligence/fast) is written against the v4 tokenizer API.
+# v5 changed tokenizer init paths and breaks the custom backend instantiation.
+# Revisit when PI publishes a v5-compatible processing_action_tokenizer.py.
 ml = [
-    "transformers>=4.45",
-    "tokenizers>=0.20",
+    "transformers>=4.45,<5",
+    "tokenizers>=0.20,<0.22",
     "accelerate>=0.34",
     "safetensors>=0.4",
     "einops>=0.8",
-    "huggingface-hub>=0.25",
-    "scipy>=1.13",      # FAST uses DCT (scipy.fft.dct)
+    "huggingface-hub>=0.25,<1",
+    "scipy>=1.13",          # FAST uses DCT (scipy.fft.dct)
     "scikit-learn>=1.5",
+    "sentencepiece>=0.2",   # required by the FAST processor's BPE backend
 ]
 
 # Torch is split out so the user can choose CUDA wheel index at install time.
@@ -125,6 +130,3 @@ files = ["src"]
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
-
-[tool.uv]
-dev-dependencies = []  # use [project.optional-dependencies].dev instead
