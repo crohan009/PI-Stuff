@@ -35,8 +35,7 @@ Legend: `- [ ]` open · `- [x] (YYYY-MM-DD)` done · `- [~] (YYYY-MM-DD)` in pro
   - sub: added `sentencepiece` to the `ml` extra — required by the FAST processor's BPE backend
   - sub: pinned `transformers<5` — PI's published FAST tokenizer code on HF Hub is authored against v4 tokenizer API
 - [x] (2026-05-17) `uv sync --extra dev` and `uv run pytest -q` passes smoke tests (6/6)
-- [ ] `HF_TOKEN` set in `.env` and `huggingface-cli whoami` works
-  - sub: FAST tokenizer download worked unauthenticated, but setting a token enables higher rate limits + private gated models (PaliGemma, Gemma 3)
+- [x] (2026-05-17) `HF_TOKEN` set in `.env` and `huggingface-cli whoami` works — logged in as `crohan009`, org `context-course`
 - [x] (2026-05-17) GPU torch wheels installed for the local CUDA version (or MPS/CPU fallback verified on macOS) — torch 2.11.0 + MPS backend live on macOS-14.5-arm64; tensor on `mps:0` confirmed
 - [x] (2026-05-17) `uv run python -c "from transformers import AutoProcessor; AutoProcessor.from_pretrained('physical-intelligence/fast', trust_remote_code=True)"` succeeds — `UniversalActionProcessor`, round-trip MSE 2.8e-4 on a (50, 14) sine chunk
 - [ ] (optional) `wandb login` if using `track` extra
@@ -44,26 +43,30 @@ Legend: `- [ ]` open · `- [x] (YYYY-MM-DD)` done · `- [~] (YYYY-MM-DD)` in pro
 ## 2. Simulation & evaluation stack
 
 ### 2a. Libero
-- [ ] Clone + `uv pip install -e ~/sim/libero`
-- [ ] Smoke: `from libero.libero import benchmark` imports
+- [x] (2026-05-17) Clone + `uv pip install -e ~/sim/libero` — automated via `scripts/setup_sim.sh`
+  - sub: needed two local fixes captured in the script: empty `~/sim/libero/libero/__init__.py` (namespace package), and a pre-seeded `~/.libero/config.yaml` (skips the interactive first-run `input()` prompt)
+- [x] (2026-05-17) Smoke: `from libero.libero import benchmark` imports
 - [ ] `pi_stack.envs.libero.LiberoEnv.reset()` returns a real obs dict
 - [ ] `step_chunk()` runs an H=50 chunk through robosuite
-- [ ] All 5 sub-suites instantiable (Spatial / Object / Goal / 10 / 90)
+  - blocker: Libero's `requirements.txt` pins robosuite 1.4 + old numpy/transformers/gym which would clobber the ML stack; resolution deferred until we implement the wrapper
+- [~] (2026-05-17) All 5 sub-suites instantiable (Spatial / Object / Goal / 10 / 90)
+  - sub: 5 sub-suites + `libero_100` visible at the `benchmark_dict` layer; per-task instantiation needs robosuite (see above)
 
 ### 2b. Kinetix
-- [ ] Clone + `uv pip install -e ~/sim/kinetix` (with `jax` extra)
-- [ ] Smoke: `import kinetix` succeeds
+- [x] (2026-05-17) Clone + `uv pip install -e ~/sim/kinetix` (with `jax` extra) — automated via `scripts/setup_sim.sh`
+- [x] (2026-05-17) Smoke: `import kinetix` succeeds — submodules `editor / environment / models / render / util` reachable, JAX 0.9.0 on CPU
 - [ ] `KinetixEnv.step_chunk()` runs at 50 Hz
 - [ ] `inject_latency_ms` actually delays inference (used to stress RTC)
 
 ### 2c. MuJoCo
-- [ ] `import mujoco` works after `uv sync --extra sim`
-- [ ] First MJCF scene loaded (`tabletop_pick`)
+- [x] (2026-05-17) `import mujoco` works after `uv sync --extra sim` — mujoco 3.8.0, gymnasium 1.3.0; 10-step sim of a minimal MJCF (sphere falling under gravity) confirms the runtime
+- [ ] First MJCF scene loaded (`tabletop_pick`) — needs an MJCF asset, not yet written
 - [ ] `MuJoCoEnv.step_chunk()` runs to completion
 
 ### 2d. Open X-Embodiment
-- [ ] `tensorflow_datasets` + `rlds` installed
-- [ ] Stream one episode from `fractal20220817_data` over GCS
+- [~] (2026-05-17) `tensorflow_datasets` + `rlds` installed
+  - sub: tfds 4.9.10 + tensorflow 2.21.0 installed via the new `oxe` extra. `rlds` skipped — no macOS arm64 wheels, no sdist; tfds reads OXE episodes natively without it
+- [x] (2026-05-17) Stream one episode from `fractal20220817_data` over GCS — anonymous access to `gs://gresearch/robotics`; first step has `image`, `natural_language_instruction`, `action`, `reward`
 - [ ] `pi_stack.data.oxe.load_oxe()` yields `OXEEpisode` with embodiment tag
 - [ ] `pi_stack.data.oxe.load_held_out()` yields exclusively held-out embodiments
 

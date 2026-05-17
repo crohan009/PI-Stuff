@@ -66,6 +66,15 @@ sim = [
     # Libero and Kinetix are typically installed from source — see docs/.
 ]
 
+# Open X-Embodiment dataset loader. TensorFlow is huge; opt-in.
+# rlds is intentionally omitted — it has no macOS arm64 wheels and no
+# source distribution as of 2026-05. tfds streams OXE episodes natively
+# without rlds; the package only adds episode-slicing helpers.
+oxe = [
+    "tensorflow>=2.16",
+    "tensorflow-datasets>=4.9",
+]
+
 # Inference server (RTC algorithm streams via websockets).
 serve = [
     "websockets>=13",
@@ -91,7 +100,7 @@ dev = [
 
 # Convenience meta-extra. `uv sync --extra all` for a kitchen-sink setup.
 all = [
-    "pi-stack[ml,gpu,sim,serve,track,dev]",
+    "pi-stack[ml,gpu,sim,oxe,serve,track,dev]",
 ]
 
 [project.scripts]
