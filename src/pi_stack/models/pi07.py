@@ -140,16 +140,17 @@ class Pi07Policy(Pi06Policy):
     # --- Context assembly -------------------------------------------------
 
     def _encode_subgoal_images(self, subgoal_images: "Tensor") -> "Tensor":
-        """``(B, K, C, H, W) → (B, K*P, hidden)``  -- one bag of image tokens."""
-        import torch
+        """``(B, K, C, H, W) → (B, K*P, hidden)``  -- one bag of image tokens.
 
+        Delegates to ``backbone.encode_image_features`` so both TinyBackbone
+        (Conv2d patch projection) and PaliGemmaAdapter (vision_tower +
+        multi_modal_projector) work without special-casing.
+        """
         if subgoal_images is None or self.subgoal_proj is None:
             return None
         B, K, C, H, W = subgoal_images.shape
         flat = subgoal_images.reshape(B * K, C, H, W)
-        # Re-use backbone's patch projection. TinyBackbone exposes net.patch_proj;
-        # real PaliGemma exposes vision tower differently — wrap there.
-        patches = self.backbone.net.patch_proj(flat).flatten(2).transpose(1, 2)
+        patches = self.backbone.encode_image_features(flat)
         patches = patches.reshape(B, K * patches.size(1), -1)
         return self.subgoal_proj(patches)
 

@@ -73,8 +73,11 @@ Legend: `- [ ]` open · `- [x] (YYYY-MM-DD)` done · `- [~] (YYYY-MM-DD)` in pro
 ## 3. Implementation — paper by paper
 
 ### 3a. π₀ (Oct 2024) — `pi_stack.models.pi0`
-- [~] (2026-05-17) Backbone loader returns `(model, processor)` for PaliGemma 3B
-  - sub: `TinyBackbone` works locally (returns `(logits, features)` matching the PaliGemma interface). Real PaliGemma 3B loader gated to NotImplementedError — needs ≥12 GB VRAM workstation
+- [x] (2026-05-18) Backbone loader returns `(model, processor)` for PaliGemma 3B
+  - sub: `PaliGemmaAdapter` wraps HF `PaliGemmaForConditionalGeneration` into the `(logits, features) + encode_image_features` contract `Pi0Policy` / `Pi07Policy` already expect; `load_backbone(PALIGEMMA_3B, device=..., dtype=...)` returns a ready-to-use adapter
+  - sub: `Pi0Policy.from_pretrained(PALIGEMMA_3B, device='cuda')` is the one-liner factory
+  - sub: 8 mocked unit tests in `tests/test_pi0_paligemma.py` verify the adapter shape contract; 1 env-gated integration test (`PI_STACK_RUN_REAL_PALIGEMMA=1`) for the real download
+  - sub: end-to-end demo in `notebooks/08_pi0_paligemma_baseline.ipynb`; `scripts/inference_smoketest.py` is the pod-side sanity script
 - [x] (2026-05-17) State encoder + late-fusion of state, image, language — `Pi0Policy.encode_context` concatenates VLM features with a state token; image patches prepended inside `TinyBackbone`
 - [x] (2026-05-17) Action expert wired with cross-attention to VLM activations — `ActionExpert` is a `TransformerDecoder` whose memory is the (projected) VLM context
 - [x] (2026-05-17) `Pi0Policy.predict_chunk(obs, language)` returns `(B, H, action_dim)` floats — verified in `tests/test_pi0.py::test_pi0_predict_chunk_shape`
@@ -228,10 +231,12 @@ step-by-step walkthrough; this section is the checkbox plan.
 - [ ] `export HF_TOKEN=<token>` and `huggingface-cli whoami`
 
 ### 8f. Real-backbone smoke test
-- [ ] Wire `load_backbone(GEMMA3_4B)` — replace the `NotImplementedError` body with a real `transformers.AutoModel.from_pretrained(spec.hf_repo, ...)` call, returning a thin adapter that exposes `(logits, features)` matching `TinyBackbone`'s contract
-- [ ] First call downloads ~8 GB into `/workspace/hf-cache/`; subsequent pod restarts use the cache
+- [x] (2026-05-18) Wire `load_backbone(PALIGEMMA_3B)` — `PaliGemmaAdapter` in `pi_stack.models.backbones`; `Pi0Policy.from_pretrained(PALIGEMMA_3B)` factory
+- [ ] Wire `load_backbone(GEMMA3_4B)` — same pattern, needs a `Gemma3Adapter` (mostly the same code minus the vision tower since Gemma 3 is text-only). Defer until we actually need π*₀.₆ / π₀.₇ on real weights
+- [ ] First real load on the pod — `uv run python scripts/inference_smoketest.py` downloads ~6 GB into `/workspace/hf-cache/`; subsequent pod restarts use the cache
 - [ ] Build `Pi07Policy(Pi07Config(backbone=GEMMA3_4B), backbone=load_backbone(GEMMA3_4B))` and run `predict_chunk(...)` on a real-sized input (224×224 image, 50-step horizon)
-- [ ] Time the forward pass; record VRAM peak. Targets: < 200 ms forward on H100, < 30 GB VRAM at fp16
+- [ ] Time the forward pass; record VRAM peak. Targets: < 200 ms forward on H100, < 30 GB VRAM at bf16
+  - sub: `scripts/inference_smoketest.py` reports both numbers automatically
 
 ### 8g. Dataset hydration
 - [ ] Pull Libero from the source clone on the volume; verify `from libero.libero import benchmark` works (re-run `scripts/setup_sim.sh` if needed)

@@ -14,9 +14,16 @@ This module assembles the policy:
               → action expert (flow matching)
               → action chunk (B, H, D)
 
-A ``TinyBackbone`` is used when tests / notebooks run locally; the real
-PaliGemma backbone is swapped in by passing a ``backbone`` callable to the
-constructor (see ``pi_stack.models.backbones.load_backbone``).
+Two backbones are first-class:
+
+- ``TinyBackbone`` for local CPU / MPS dev and the test suite — 1 M params,
+  same ``(logits, features)`` contract.
+- :class:`pi_stack.models.backbones.PaliGemmaAdapter` for the real
+  experimental baseline — PaliGemma 3B (≈ 6 GB bf16). Loads via
+  ``Pi0Policy.from_pretrained(PALIGEMMA_3B, device='cuda')``.
+
+Whichever backbone you pass, the rest of the pipeline (state encoder,
+action expert, flow-matching sampler, RTC inpainting) is identical.
 """
 
 from __future__ import annotations
@@ -136,3 +143,38 @@ class Pi0Policy:
         """Return the VLM's next-token logits — used by the KI discrete loss."""
         logits, _ = self.backbone(language_ids, images=images)
         return logits
+
+    # --- Factory --------------------------------------------------------
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        spec: BackboneSpec | None = None,
+        *,
+        config: Pi0Config | None = None,
+        device: str | None = None,
+        dtype=None,
+        **load_kwargs,
+    ) -> "Pi0Policy":
+        """Build a Pi0Policy backed by a real pretrained VLM.
+
+        Convenience wrapper. Equivalent to::
+
+            backbone = load_backbone(spec, device=device, dtype=dtype, **load_kwargs)
+            policy   = Pi0Policy(config or Pi0Config(backbone=spec), backbone=backbone)
+            policy.to(device)  # for the action-expert / state-encoder modules
+
+        ``spec`` defaults to the spec on ``config.backbone`` if a config is
+        given, else to :data:`pi_stack.models.backbones.PALIGEMMA_3B`.
+        """
+        from pi_stack.models.backbones import PALIGEMMA_3B, load_backbone
+
+        if spec is None:
+            spec = config.backbone if config is not None else PALIGEMMA_3B
+        if config is None:
+            config = Pi0Config(backbone=spec)
+        backbone = load_backbone(spec, device=device, dtype=dtype, **load_kwargs)
+        policy = cls(config, backbone=backbone)
+        if device is not None:
+            policy.to(device)
+        return policy

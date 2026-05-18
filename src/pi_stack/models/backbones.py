@@ -6,9 +6,13 @@
 
 For local development on commodity hardware we ship a :class:`TinyBackbone`
 stand-in. It has the same input/output contract as a real PaliGemma/Gemma3
-forward pass (``(B, T, hidden_size)`` context features), so the rest of the
-pi_stack code is hardware-agnostic. Real backbone weights load via
-``load_backbone(spec)`` on a workstation with sufficient memory.
+forward pass (``(logits, features)``), so the rest of the pi_stack code is
+hardware-agnostic.
+
+The real PaliGemma loader lives here too. It wraps
+``transformers.PaliGemmaForConditionalGeneration`` into the same minimal
+contract — see :class:`PaliGemmaAdapter`. Caller is responsible for
+tokenization via the adapter's ``processor`` attribute.
 """
 
 from __future__ import annotations
@@ -111,6 +115,14 @@ class TinyBackbone:
     def __call__(self, token_ids: "Tensor", images: "Tensor | None" = None):
         return self.net(token_ids, images)
 
+    def encode_image_features(self, images: "Tensor") -> "Tensor":
+        """``(B, C, H, W) → (B, num_patches, hidden_size)``.
+
+        Convenience for callers (Pi07Policy.subgoal pathway) that want image
+        tokens *without* going through the full Transformer stack.
+        """
+        return self.net.patch_proj(images).flatten(2).transpose(1, 2)
+
     def parameters(self):
         return self.net.parameters()
 
@@ -119,19 +131,132 @@ class TinyBackbone:
         return self
 
 
+# --- Real backbone — PaliGemma ----------------------------------------
+
+
+class PaliGemmaAdapter:
+    """Wraps HF ``PaliGemmaForConditionalGeneration`` into the pi_stack contract.
+
+    PaliGemma's HF interface returns a full ``ModelOutput`` from a complex
+    call signature; we narrow it down to the same ``(logits, features)``
+    that :class:`TinyBackbone` returns so :class:`pi_stack.models.pi0.Pi0Policy`
+    can swap backbones without code changes.
+
+    Attributes:
+        model:      the HF ``PaliGemmaForConditionalGeneration`` instance
+        processor:  the matching HF ``PaliGemmaProcessor`` (use it to
+                    tokenize text + encode images into ``(input_ids, pixel_values)``)
+        hidden_size, vocab_size: text-model dims, mirrored from
+                    ``model.config.text_config`` for downstream auto-sizing
+
+    Notes:
+        - ``token_ids`` passed to ``__call__`` must include the special
+          ``<image>`` placeholder tokens at the positions where image
+          features should be spliced in. The ``processor`` produces these.
+        - ``images`` are PaliGemma's ``pixel_values`` — (B, C, H, W) after
+          the processor's image transform (normalize + resize to 224 px).
+        - The adapter automatically casts ``images`` to the model dtype
+          (typically bf16) so callers don't have to worry about it.
+    """
+
+    def __init__(self, model, processor) -> None:
+        self.model = model
+        self.processor = processor
+
+        cfg = model.config
+        text_cfg = getattr(cfg, "text_config", cfg)
+        self.hidden_size = text_cfg.hidden_size
+        self.vocab_size = text_cfg.vocab_size
+
+    @property
+    def _dtype(self):
+        return next(self.model.parameters()).dtype
+
+    @property
+    def _device(self):
+        return next(self.model.parameters()).device
+
+    def __call__(self, token_ids: "Tensor", images: "Tensor | None" = None):
+        kwargs = dict(
+            input_ids=token_ids,
+            output_hidden_states=True,
+            return_dict=True,
+        )
+        if images is not None:
+            kwargs["pixel_values"] = images.to(self._dtype)
+        out = self.model(**kwargs)
+        # hidden_states is a tuple (n_layers+1,); -1 is the final layer.
+        return out.logits, out.hidden_states[-1]
+
+    def encode_image_features(self, images: "Tensor") -> "Tensor":
+        """``(B, C, H, W) → (B, num_patches, hidden_size)`` in the text-model space.
+
+        Runs the vision tower + multi-modal projector, skipping the LM. Used
+        by :class:`pi_stack.models.pi07.Pi07Policy` for subgoal images.
+        """
+        x = images.to(self._dtype)
+        vision_out = self.model.vision_tower(x)
+        vision_features = vision_out.last_hidden_state
+        return self.model.multi_modal_projector(vision_features)
+
+    def parameters(self):
+        return self.model.parameters()
+
+    def to(self, device) -> "PaliGemmaAdapter":
+        self.model.to(device)
+        return self
+
+    def preprocess(self, text: str | list[str], images, *, return_tensors: str = "pt"):
+        """Tokenize text + encode images into the model's expected inputs.
+
+        Returns a dict typically with ``input_ids`` (B, T) and ``pixel_values``
+        (B, C, H, W). Pass these directly into ``predict_chunk(...)``.
+        """
+        return self.processor(text=text, images=images, return_tensors=return_tensors)
+
+
 # --- Real backbone loading -----------------------------------------------
 
 
-def load_backbone(spec: BackboneSpec, *, device: str | None = None):
+def load_backbone(spec: BackboneSpec, *, device: str | None = None, dtype=None, **load_kwargs):
     """Load a backbone from HuggingFace.
 
-    Only PaliGemma / Gemma 3 / SigLIP are real loaders here — they need 6-12GB
-    of VRAM and a recent transformers build. On hardware that can't hold
-    them, use :class:`TinyBackbone` instead.
+    Args:
+        spec: which backbone (see ``PALIGEMMA_3B`` etc. constants above).
+        device: optional ``str`` or ``torch.device`` — calls ``.to(device)``
+            on the model after load. Common values: ``'cuda'``, ``'mps'``.
+        dtype: optional torch dtype. Defaults to ``torch.bfloat16`` for
+            real models — they ship in bf16 and the savings are large.
+        **load_kwargs: passed through to ``from_pretrained()``.
+
+    Returns:
+        - ``TinyBackbone`` for ``TINY``
+        - ``PaliGemmaAdapter`` for ``PALIGEMMA_3B``
+        - raises ``NotImplementedError`` for Gemma 3 / SigLIP (TBD)
     """
     if spec.name == "tiny":
-        return TinyBackbone(hidden_size=spec.hidden_size, vocab_size=spec.vocab_size)
+        return TinyBackbone(
+            hidden_size=spec.hidden_size or 128,
+            vocab_size=spec.vocab_size or 1024,
+        )
+
+    if spec.name == "paligemma":
+        import torch
+        from transformers import AutoProcessor, PaliGemmaForConditionalGeneration
+
+        dtype = dtype if dtype is not None else torch.bfloat16
+        model = PaliGemmaForConditionalGeneration.from_pretrained(
+            spec.hf_repo,
+            torch_dtype=dtype,
+            **load_kwargs,
+        )
+        if device is not None:
+            model = model.to(device)
+        processor = AutoProcessor.from_pretrained(spec.hf_repo)
+        return PaliGemmaAdapter(model, processor)
+
     raise NotImplementedError(
-        f"Real backbone loading for {spec.name} ({spec.hf_repo}) requires a "
-        "GPU workstation with ≥ 12 GB VRAM. Use TinyBackbone for local dev."
+        f"Real backbone loading for {spec.name} ({spec.hf_repo}) is not wired "
+        f"yet. PaliGemma is the experimental baseline (use PALIGEMMA_3B); "
+        f"Gemma 3 / SigLIP land when we need them."
     )
