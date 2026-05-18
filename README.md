@@ -134,6 +134,22 @@ PI-Stuff/
 └── data/                 # local datasets (gitignored)
 ```
 
+## Try the π₀ baseline on a real GPU in 2 minutes
+
+If you just want to verify the experimental baseline (real PaliGemma 3B +
+flow-matching action expert + one KI step) works end-to-end:
+
+**[Open notebook 00 in Google Colab](https://colab.research.google.com/github/crohan009/PI-Stuff/blob/main/notebooks/00_pi0_paligemma_baseline.ipynb)** →
+**Runtime → Change runtime type → T4 GPU** → run all cells.
+
+The notebook's first code cell auto-detects Colab, clones this repo into
+`/content/pi-stack`, and `pip install -e .[ml]` (without touching Colab's
+preinstalled CUDA torch). You need an `HF_TOKEN` in Colab secrets (one-time
+setup, ~10 seconds) — full walkthrough in [`docs/colab.md`](./docs/colab.md).
+
+This is *fast verification only*. For sustained training / RL / eval work,
+the RunPod plan is in [`docs/runpod.md`](./docs/runpod.md).
+
 ## Hardware reality
 
 Two environments, by design:

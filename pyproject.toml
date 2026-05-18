@@ -3,14 +3,16 @@ name = "pi-stack"
 version = "0.0.1"
 description = "Single-handed implementation of the Physical Intelligence research arc (π₀ → π₀.₇)."
 readme = "README.md"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.10,<3.13"
 license = { text = "Apache-2.0" }
 authors = [{ name = "crohan", email = "cxrohan009@gmail.com" }]
 keywords = ["robotics", "vla", "physical-intelligence", "flow-matching", "imitation-learning"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
